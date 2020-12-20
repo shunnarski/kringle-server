@@ -10,6 +10,7 @@ const path = require("path");
 const giftsCRUD = require("./GiftsCRUD");
 const awsconfig = require('./awsconfig');
 const environment_vars = require('./envs');
+const process = require("process");
 var EventEmitter = require('events').EventEmitter;
 
 const GIFTSTABLE = "gifts";
@@ -211,7 +212,8 @@ app.post('/deleteGiftFromList', function(req, res) {
 });
 
 // starting server on port 8080
-app.listen(8080, () => {
+const port = process.env.port || 8080;
+app.listen(port, () => {
     console.log("Server started!");
-    console.log("on port 8080");
+    console.log("on port " + port);
 })
