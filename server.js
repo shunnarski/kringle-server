@@ -19,16 +19,22 @@ var AWS = awsconfig.AWS;
 var docClient = new AWS.DynamoDB.DocumentClient();
 
 async function getGiftListAsync(user_id) {
-    const params = {
-        TableName: GIFTSTABLE,
-        KeyConditionExpression: "user_id = :user_id",
-        ExpressionAttributeValues: {
-             ":user_id": user_id
-        }
-    };
-
-    const res = await docClient.query(params).promise();
-    return res.Items[0];
+    try {
+        const params = {
+            TableName: GIFTSTABLE,
+            KeyConditionExpression: "user_id = :user_id",
+            ExpressionAttributeValues: {
+                 ":user_id": user_id
+            }
+        };
+    
+        const res = await docClient.query(params).promise();
+        return res.Items[0];
+    }
+    catch(e) {
+        console.log("Unable to retrieve gift list from server");
+        throw new Error(e);
+    }
 }
 
 async function getEtsyGiftInfo(listing_id) {
@@ -41,26 +47,29 @@ async function getEtsyGiftInfo(listing_id) {
     etsyGift.user_id = "";
     etsyGift.id = 0;
     etsyGift.server = "etsy.com";
-    
-    let options = {
-        url: listing_url + api_key
-    };
 
     const urls = [(listing_url + api_key), (listing_url + "/images" + api_key)];
 
-    const [res1, res2] = await axios.all([
-        axios.get(urls[0]),
-        axios.get(urls[1])
-    ]);
+    try {
+        const [res1, res2] = await axios.all([
+            axios.get(urls[0]),
+            axios.get(urls[1])
+        ]);
 
-    let etsyInfoRes = res1.data.results[0];
-    let etsyImageRes = res2.data.results[0];
+        let etsyInfoRes = res1.data.results[0];
+        let etsyImageRes = res2.data.results[0];
 
-    etsyGift.name = etsyInfoRes.title;
-    etsyGift.price = parseFloat(etsyInfoRes.price);
-    etsyGift.photo_url = etsyImageRes.url_fullxfull;
+        etsyGift.name = etsyInfoRes.title;
+        etsyGift.price = parseFloat(etsyInfoRes.price);
+        etsyGift.photo_url = etsyImageRes.url_fullxfull;
 
-    return etsyGift;
+        return etsyGift;
+    }
+    catch(e) {
+        console.log("Etsy gift info retrieval failed");
+        throw new Error(e);
+    }
+
 }
 
 function addGiftToList(gift) {
@@ -142,73 +151,106 @@ app.use(function(req, res, next) {
 
 app.get('/getGiftListForUser/:userId', async function(req, res) {
 
-    let user_id = req.params["userId"];
-    const Item = await getGiftListAsync(user_id);
-
-    var gift_list = [];
-
-    // filter only the gifts to pass back
-    var gift_keys = Object.keys(Item).filter(k => {
-        return k.substring(0, 4) == "gift";
-    });
-
-    gift_keys.sort();
-
-    gift_keys.forEach(key => {
-        gift_list.push(Item[key]);
-    })
-  
-    let response = {
-        user_id: user_id,
-        gifts: gift_list.sort()
+    try {
+        let user_id = req.params["userId"];
+        const Item = await getGiftListAsync(user_id);
+    
+        var gift_list = [];
+    
+        // filter only the gifts to pass back
+        var gift_keys = Object.keys(Item).filter(k => {
+            return k.substring(0, 4) == "gift";
+        });
+    
+        gift_keys.sort();
+    
+        gift_keys.forEach(key => {
+            gift_list.push(Item[key]);
+        })
+      
+        let response = {
+            user_id: user_id,
+            gifts: gift_list.sort()
+        }
+        res.json(response);
     }
-    res.json(response);
+    catch(e) {
+        console.log("Error getting gift list");
+        throw new Error(e);
+    }
+    
 });
 
 app.all("/getEtsyInfo/:listing_id/", async function(req, res, next) {
-    let listing_id = req.params['listing_id'];
-    let user_id = req.params['user_id'];
-
-    let etsyGift = await getEtsyGiftInfo(listing_id);
-
-    res.json(etsyGift);
-
+    try {
+        let listing_id = req.params['listing_id'];
+        let user_id = req.params['user_id'];
+    
+        let etsyGift = await getEtsyGiftInfo(listing_id);
+    
+        res.json(etsyGift);
+    }
+    catch(e) {
+        console.log("Unable to get Etsy info");
+        throw new Error(e);
+    }
 });
 
 
 app.all("/getEtsyInfo/:listing_id/images", function(req, res, next) {
-    let listing_id = req.params['listing_id'];
-    let api_key = "?api_key=" + environment_vars.EtsyAPISecrets.keystring;
-    var listing_url = environment_vars.EtsyAPISecrets.listings_api_server + listing_id;
+
+    try {
+        let listing_id = req.params['listing_id'];
+        let api_key = "?api_key=" + environment_vars.EtsyAPISecrets.keystring;
+        var listing_url = environment_vars.EtsyAPISecrets.listings_api_server + listing_id;
+        
+        const options = {
+            url: listing_url + "/images" + api_key
+        };
     
-    const options = {
-        url: listing_url + "/images" + api_key
-    };
-
-    let emitter = new EventEmitter();
-    request(options, function(error, response, body) {
-        emitter.data = JSON.parse(body);
-        emitter.emit('udpate');
-    });
-
-    emitter.on('update', function() {
-        res.json(emitter.data.results[0]);
-    });
+        let emitter = new EventEmitter();
+        request(options, function(error, response, body) {
+            emitter.data = JSON.parse(body);
+            emitter.emit('udpate');
+        });
+    
+        emitter.on('update', function() {
+            res.json(emitter.data.results[0]);
+        });
+    }
+    catch(e) {
+        console.log("Error getting Etsy images");
+        throw new Error(e);
+    }
+  
 });
 
 app.post('/addGiftToList', function(req, res) {
-    const gift = req.body;
-    const response = addGiftToList(gift);
-    res.send("gift added")
-    // console.log("hello");
-    // console.log(req.body);
-    // res.send("Post request sent successfully")
+
+    try {
+        const gift = req.body;
+        const response = addGiftToList(gift);
+        res.send("gift added")
+    }
+    catch(e) {
+        console.log("Add gift to list failed");
+        throw new Error(e);
+    }
+    
 })
 
+
 app.post('/deleteGiftFromList', function(req, res) {
-    const gift = req.body;
-    const response = deleteGiftFromList(gift);
-    res.send("gift removed")
+    try {
+        const gift = req.body;
+        const response = deleteGiftFromList(gift);
+        res.send("gift removed")
+    }
+    catch(e) {
+        console.log("Failure deleting gift from list");
+        throw new Error(e);
+    }
+    
 });
 
 // starting server on port 8080
