@@ -139,6 +139,10 @@ app.use(function(req, res, next) {
     next();
 });
 
+app.get("/", (req, res) => {
+    res.send("Welcome to the home page");
+})
+
 // // Set the base path to the kringle dist folder
 // app.use(express.static(path.join(__dirname, '../dist/kringle')));
 
@@ -254,9 +258,8 @@ app.post('/deleteGiftFromList', function(req, res) {
 });
 
 // starting server on port 8080
-const port = process.env.port || 8081;
+const port = process.env.port || 8080;
 app.listen(port, () => {
-    console.log(process.env);
     console.log("Server started!");
     console.log("on port " + port);
 })
