@@ -254,7 +254,7 @@ app.post('/deleteGiftFromList', function(req, res) {
 });
 
 // starting server on port 8080
-const port = process.env.port || 8080;
+const port = process.env.port || 8081;
 app.listen(port, () => {
     console.log("Server started!");
     console.log("on port " + port);
